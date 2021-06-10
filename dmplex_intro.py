@@ -29,7 +29,7 @@ def getEdgeLength(plex, sec, dim, index):
     v1, v2 = [np.array([plexCoords[sec.getOffset(v) + j] for j in range(dim)]) for v in vertices]
     return distance(v1, v2)
 
-def getMeshQualityMeasures(plex, sec, dim, index):
+def getCellQualityMeasures(plex, sec, dim, index):
     '''Takes in the index of a cell and returns MeshQualityMeasures of the cell'''
     cStart, cEnd = plex.getDepthStratum(FACE_DEPTH_STRATUM)
     assert cStart <= index < cEnd
@@ -44,7 +44,6 @@ def getMeshQualityMeasures(plex, sec, dim, index):
         # Add vertices to a set (to avoid overcounting), use to calculate CQM
         verts = plex.getCone(e)
         v1, v2 = [([plexCoords.array[sec.getOffset(v) + j] for j in range(dim)]) for v in verts]
-        print (v1)
         vertices.add(tuple(v1))
         vertices.add(tuple(v2))
         
@@ -76,15 +75,40 @@ def getMeshQualityMeasures(plex, sec, dim, index):
     vec12 = v2 - v1
     vec23 = v3 - v2
     vec31 = v1 - v3
-    a1 = np.arccos (np.dot(vec12, vec31) / (distance(v1, v2) * distance(v1, v3)))
-    a2 = np.arccos (np.dot(vec12, vec23) / (distance(v1, v2) * distance(v2, v3)))
-    a3 = np.arccos (np.dot(vec31, vec23) / (distance(v1, v3) * distance(v2, v3)))
+    dist12 = distance(v1, v2)
+    dist23 = distance(v2, v3)
+    dist31 = distance(v3, v1)
+    a1 = np.arccos (np.dot(vec12, vec31) / (dist12 * dist31))
+    a2 = np.arccos (np.dot(vec12, vec23) / (dist12 * dist23))
+    a3 = np.arccos (np.dot(vec31, vec23) / (dist31 * dist23))
     minAngle = min(a1, a2, a3)
     maxAngle = max(a1, a2, a3)
     idealAngle = np.pi / 3      # There's gotta be a better way to write this stuff
     equiangleSkew = max( (maxAngle - idealAngle) / (np.pi - idealAngle), (idealAngle - minAngle) / idealAngle)
 
-    skewness = 0
+    # Calculating in accordance with https://www.engmorph.com/skewness-finite-elemnt
+    # sideN -> side opposite vertex vN
+    
+    midPointSide1 = v2 + (v3 - v2) / 2
+    midPointSide2 = v3 + (v1 - v3) / 2
+    midPointSide3 = v1 + (v2 - v1) / 2
+    # print ("Vertices: {} {}, midpoint: {}".format(v2, v3, midPointSide1))
+    lineNormalSide1 = midPointSide1 - v1
+    lineOrthSide1 = midPointSide3 - midPointSide2
+    theta1 = np.arccos (np.dot(lineNormalSide1, lineOrthSide1) / (distance(v1, midPointSide1) * distance(midPointSide2, midPointSide3)))
+    theta2 = np.pi - theta1
+
+    lineNormalSide2 = midPointSide2 - v2
+    lineOrthSide2 = midPointSide1 - midPointSide3
+    theta3 = np.arccos (np.dot(lineNormalSide2, lineOrthSide2) / (distance(v2, midPointSide2) * distance(midPointSide1, midPointSide3)))
+    theta4 = np.pi - theta3
+
+    lineNormalSide3 = midPointSide3 - v3
+    lineOrthSide3 = midPointSide2 - midPointSide1
+    theta5 = np.arccos (np.dot(lineNormalSide3, lineOrthSide3) / (distance(v3, midPointSide3) * distance(midPointSide2, midPointSide1)))
+    theta6 = np.pi - theta5
+
+    skewness = (np.pi / 2) - min(theta1, theta2, theta3, theta4, theta5, theta6)
     scaledJacobian = 0
 
     return CQM(area, minAngle, aspectRatio, skewness, equiangleSkew, scaledJacobian)
@@ -138,7 +162,7 @@ def main():
     plexCoords = plex.getCoordinates()
 
     # TEST FOR EDGE LENGTH FUNCTION
-    # for edge in range(Start, End):
+    # for edge in range(eStart, eEnd):
     #     try:
     #         edgeLength = getEdgeLength(plex, sec, dim, edge)
     #         print ("Edge: {}, Edge Length: {}".format(edge, edgeLength))
@@ -148,7 +172,7 @@ def main():
     # TEST FOR CELL QUALITY MEASURES
     for cell in range(cStart, cEnd):
         try:
-            cellQuality = getMeshQualityMeasures(plex, sec, dim, cell)
+            cellQuality = getCellQualityMeasures(plex, sec, dim, cell)
             print ("Cell: {} Quality: {}".format(cell, cellQuality))
         except AssertionError:
             print ("{} is not a cell index. Skipped.".format(cell))
