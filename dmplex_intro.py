@@ -59,12 +59,17 @@ def getCellQualityMeasures(plex, sec, dim, index):
         
     # Calculate area (Heron's formula) and aspect ratio from edge lengths
     # Not entirely sure, but I think we should be able to calculate skew as well from this
+    edgeLengthRatio = maxEdgeLength / minEdgeLength
     aspectRatio = maxEdgeLength / minEdgeLength
     semiPerimeter = sum(edgeLengths) / 2
     area = semiPerimeter
+    miniProduct = 1             # We are reusing this value = (s-a)(s-b)(s-c)
+    edgeLengthsProduct = 1
     for i in range(len(edgeLengths)):
-        area *= (semiPerimeter - edgeLengths[i])
-    area = np.sqrt(area)
+        miniProduct *= (semiPerimeter - edgeLengths[i])
+        edgeLengthsProduct *= edgeLengths[i]
+    area = np.sqrt(area * miniProduct)
+    aspectRatio = edgeLengthsProduct / (8 * miniProduct)
 
     # Calculate angles at each vertex
     # If we know we're dealing with triangular meshes, I could just hard-code the vector calculations
@@ -122,7 +127,7 @@ def main():
         [0.5, 0.0], # 1
         [1.0, 0.0], # 2
         [0.0, 0.5], # 3
-        [0.5, 0.5], # 4
+        [0.4, 0.6], # 4
         [1.0, 0.5], # 5
         [0.0, 1.0], # 6
         [0.5, 1.0], # 7
@@ -144,6 +149,7 @@ def main():
     plex = PETSc.DMPlex().createFromCellList(dim, cells, coords, comm=PETSc.COMM_WORLD)
     # comm - the basic object used by MPI to determine which processes are involved in a communication 
     # PETSc.COMM_WORLD - the equivalent of the MPI_COMM_WORLD communicator which represents all the processes that PETSc knows about. 
+    print (plex.getDimension())
 
     # Now, we set up a section so that we can smoothly translate between the co-ordinate plane and our DMPlex representation
     numComponents = 1
@@ -155,9 +161,13 @@ def main():
     plex.setSection(sec)
 
     # Some bookkeeping
-    vStart, vEnd = plex.getDepthStratum(0)
-    eStart, eEnd = plex.getDepthStratum(1)
-    cStart, cEnd = plex.getDepthStratum(2)
+    vStart, vEnd = plex.getDepthStratum(VERTEX_DEPTH_STRATUM)
+    eStart, eEnd = plex.getDepthStratum(EDGE_DEPTH_STRATUM)
+    cStart, cEnd = plex.getDepthStratum(FACE_DEPTH_STRATUM)
+    
+    # hStart, hEnd = plex.getDepthStratum(3)
+    # print ("hStart, hEnd: {} {}".format(hStart, hEnd))
+    
     Start, End = plex.getChart()
     plexCoords = plex.getCoordinates()
 
