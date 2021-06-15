@@ -112,6 +112,7 @@ class MeshQualityCalculator(object):
                 
         v1, v2, v3 = [np.array(v) for v in vertices]
         # These guys are np arrays so i can do element-wise subtraction
+        # Get edge vectors
         vec12 = v2 - v1
         vec23 = v3 - v2
         vec31 = v1 - v3
@@ -121,6 +122,22 @@ class MeshQualityCalculator(object):
         dist23 = self.distance(v2, v3)
         dist31 = self.distance(v3, v1)
         edgeLengths = [dist12, dist23, dist31]
+
+        # Calculate the determinant of Jacobian at each vertex
+        # Take minimum Jacobian and divide by edge lengths
+        jacobianDet1 = np.linalg.det(np.array([vec12, -vec31]))      # This is actually jacobianMatrix1.T, but won't change the determinant
+        jacobianDet2 = np.linalg.det(np.array([vec23, -vec12]))
+        jacobianDet3 = np.linalg.det(np.array([vec31, -vec23]))
+
+        # I think we want minimum absolute jacobian, not minimum jacobian (???)
+        jacobians = [jacobianDet1, jacobianDet2, jacobianDet3]
+        absoluteJacobians = [abs(jac) for jac in jacobians]
+        distanceProducts = [(dist12 * dist31), (dist23 * dist12), (dist31 * dist23)]
+        # https://cubit.sandia.gov/15.5/help_manual/WebHelp/mesh_generation/mesh_quality_assessment/triangular_metrics.htm
+        # https://www.osti.gov/biblio/5009 - shows how to calculate the jacobian
+        minJacobianIndex = absoluteJacobians.index(min(absoluteJacobians))
+        # print (jacobians, absoluteJacobians)
+        scaledJacobian = jacobians[minJacobianIndex] / distanceProducts[minJacobianIndex]
         
         # Calculate angles at each vertex
         a1 = np.arccos (np.dot(vec12, vec31) / (dist12 * dist31))
@@ -128,13 +145,13 @@ class MeshQualityCalculator(object):
         a3 = np.arccos (np.dot(vec31, vec23) / (dist31 * dist23))
         anglesAtVertices = [a1, a2, a3]
         
-        maxEdgeLength = max(edgeLengths)
-        minEdgeLength = min(edgeLengths)
+        # maxEdgeLength = max(edgeLengths)
+        # minEdgeLength = min(edgeLengths)
         minAngle = min(anglesAtVertices)
         maxAngle = max(anglesAtVertices)
         
         # Calculate area (Heron's formula), edge length ratio, and aspect ratio from edge lengths
-        edgeLengthRatio = maxEdgeLength / minEdgeLength
+        # edgeLengthRatio = maxEdgeLength / minEdgeLength
         semiPerimeter = sum(edgeLengths) / 2
         area = semiPerimeter
         miniProduct = 1             # We are reusing this value = (s-a)(s-b)(s-c)
@@ -170,9 +187,7 @@ class MeshQualityCalculator(object):
         theta6 = np.pi - theta5
 
         skewness = (np.pi / 2) - min(theta1, theta2, theta3, theta4, theta5, theta6)
-        # TODO: https://cubit.sandia.gov/15.5/help_manual/WebHelp/mesh_generation/mesh_quality_assessment/triangular_metrics.htm
-        scaledJacobian = 0
-
+        
         return CQM(area, minAngle, aspectRatio, skewness, equiangleSkew, scaledJacobian)
     
     def getQuadrilateralCellQualityMeasures(self, index):
