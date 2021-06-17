@@ -123,26 +123,19 @@ class MeshQualityCalculator(object):
         dist31 = self.distance(v3, v1)
         edgeLengths = [dist12, dist23, dist31]
 
-        # Calculate the determinant of Jacobian at each vertex
-        # Take minimum Jacobian and divide by edge lengths
-        jacobianDet1 = np.linalg.det(np.array([vec12, -vec31]))      # This is actually jacobianMatrix1.T, but won't change the determinant
-        jacobianDet2 = np.linalg.det(np.array([vec23, -vec12]))
-        jacobianDet3 = np.linalg.det(np.array([vec31, -vec23]))
-
-        # I think we want minimum absolute jacobian, not minimum jacobian (???)
-        jacobians = [jacobianDet1, jacobianDet2, jacobianDet3]
-        absoluteJacobians = [abs(jac) for jac in jacobians]
-        distanceProducts = [(dist12 * dist31), (dist23 * dist12), (dist31 * dist23)]
+        # Calculate the scaled Jacobian at each vertex
         # https://cubit.sandia.gov/15.5/help_manual/WebHelp/mesh_generation/mesh_quality_assessment/triangular_metrics.htm
         # https://www.osti.gov/biblio/5009 - shows how to calculate the jacobian
-        minJacobianIndex = absoluteJacobians.index(min(absoluteJacobians))
-        # print (jacobians, absoluteJacobians)
-        scaledJacobian = jacobians[minJacobianIndex] / distanceProducts[minJacobianIndex]
+        scaledJacobian1 = np.absolute(np.linalg.det(np.array([vec12, -vec31]))) / (dist12 * dist31)
+        scaledJacobian2 = np.absolute(np.linalg.det(np.array([vec23, -vec12]))) / (dist23 * dist12)
+        scaledJacobian3 = np.absolute(np.linalg.det(np.array([vec31, -vec23]))) / (dist31 * dist23)
+        scaledJacobian = min(scaledJacobian1, scaledJacobian2, scaledJacobian3)
         
         # Calculate angles at each vertex
-        a1 = np.arccos (np.dot(vec12, vec31) / (dist12 * dist31))
-        a2 = np.arccos (np.dot(vec12, vec23) / (dist12 * dist23))
-        a3 = np.arccos (np.dot(vec31, vec23) / (dist31 * dist23))
+        # Note: Orienting the vectors is important
+        a1 = np.arccos (np.dot(vec12, -vec31) / (dist12 * dist31))
+        a2 = np.arccos (np.dot(vec12, -vec23) / (dist12 * dist23))
+        a3 = np.arccos (np.dot(vec31, -vec23) / (dist31 * dist23))
         anglesAtVertices = [a1, a2, a3]
         
         # maxEdgeLength = max(edgeLengths)
@@ -198,6 +191,24 @@ class MeshQualityCalculator(object):
     
     def getHexahedralCellQualityMeasures(self, index):
         return CQM(0, 0, 0, 0, 0, 0)
+
+
+def formatCQM(cqm, dim=2):
+    '''Just a pprint for CQM, default is {:.5f} for now'''
+    fields = cqm._fields
+    retval = '('
+    for i, field in enumerate(fields):
+        if i == 0:
+            if dim == 2:
+                retval += 'area: {:.5f} '.format(cqm[i])
+            elif dim == 3:
+                retval += 'volume: {:.5f} '.format(cqm[i])
+            else:
+                retval += field + ': {:.5f} '.format(cqm[i])
+            continue
+        retval += field + ': {:.5f} '.format(cqm[i])
+    retval = retval.rstrip() + ')'
+    return retval
     
 def main():
     dim = 2
@@ -214,19 +225,21 @@ def main():
     ], dtype=float)
     
     cells = np.asarray([
-        [0, 1, 3],
-        [1, 4, 3],
-        [1, 2, 4],
-        [2, 4, 5],
-        [3, 4, 6],
-        [4, 6, 7],
-        [5, 7, 8],
-        [4, 5, 7],
+        [0, 1, 3], # 0
+        [1, 4, 3], # 1
+        [1, 2, 4], # 2
+        [2, 4, 5], # 3
+        [3, 4, 6], # 4
+        [4, 6, 7], # 5
+        [5, 7, 8], # 6
+        [4, 5, 7], # 7
     ], dtype=PETSc.IntType)
-    # dim = 3 
     # Create DMPlex from cells and vertices
-    # plex = PETSc.DMPlex().createBoxMesh([4]*dim, simplex=True)
     plex = PETSc.DMPlex().createFromCellList(dim, cells, coords, comm=PETSc.COMM_WORLD)
+    # Alternative: Generate box mesh using PETSc 
+    # dim = 3 
+    # plex = PETSc.DMPlex().createBoxMesh([4]*dim, simplex=True)
+    
 
     # Actually still not sure 100% what this code is doing, but it creates a section
     numComponents = 1
@@ -238,11 +251,10 @@ def main():
     plex.setSection(sec)
 
     qualityCalculator = MeshQualityCalculator(plex, sec)
-    print ("Mesh type: {}".format(qualityCalculator.meshType))
+    # print ("Mesh type: {}".format(qualityCalculator.meshType))
     cStart, cEnd = qualityCalculator.getCellIndices()
     for c in range(cStart, cEnd):
-        print ("Cell: {} {}".format(c, qualityCalculator.getCellQualityMeasures(c)))
-    
+        print ("Cell: {} CQM: {}".format(c, formatCQM(qualityCalculator.getCellQualityMeasures(c), dim=dim)))
 
 if __name__ == '__main__':
     main()
