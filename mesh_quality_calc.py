@@ -1,6 +1,8 @@
 from petsc4py import *
 from petsc4py import PETSc
 
+from firedrake import *
+
 import numpy as np
 from collections import namedtuple
 from enum import Enum
@@ -235,10 +237,10 @@ def main():
         [4, 5, 7], # 7
     ], dtype=PETSc.IntType)
     # Create DMPlex from cells and vertices
-    plex = PETSc.DMPlex().createFromCellList(dim, cells, coords, comm=PETSc.COMM_WORLD)
+    # plex = PETSc.DMPlex().createFromCellList(dim, cells, coords, comm=PETSc.COMM_WORLD)
     # Alternative: Generate box mesh using PETSc 
-    # dim = 3 
-    # plex = PETSc.DMPlex().createBoxMesh([4]*dim, simplex=True)
+    dim = 2 
+    plex = PETSc.DMPlex().createBoxMesh([4]*dim, simplex=True)
     
 
     # Actually still not sure 100% what this code is doing, but it creates a section
