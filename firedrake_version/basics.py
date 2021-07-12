@@ -1,4 +1,5 @@
 from firedrake import *
+import numpy as np
 import matplotlib.pyplot as plt
 
 def setup_section_coords(plex, dim=2):
@@ -34,7 +35,7 @@ def visualize_2dmesh(mesh, fig=None, dim=2):
 
 def test_main():
     print ("Firedrake successfully imported")
-    mesh = UnitSquareMesh(5, 5)
+    mesh = UnitSquareMesh(2, 2)
     dim = 2
     fig = visualize_2dmesh(mesh)
     plt.show()
