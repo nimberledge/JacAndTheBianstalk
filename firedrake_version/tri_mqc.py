@@ -65,6 +65,7 @@ class TriangleMeshQualityCalculator(MeshQualityCalculator):
         equiangleSkew = max( (maxAngle - idealAngle) / (np.pi - idealAngle),\
          (idealAngle - minAngle) / idealAngle)
 
+        # Calculating in accordance with https://www.engmorph.com/skewness-finite-elemnt
         midPointSide1 = v2 + (v3 - v2) / 2
         midPointSide2 = v3 + (v1 - v3) / 2
         midPointSide3 = v1 + (v2 - v1) / 2
@@ -89,7 +90,7 @@ class TriangleMeshQualityCalculator(MeshQualityCalculator):
 
 def test_main():
     print ("Firedrake successfully imported")
-    mesh = UnitSquareMesh(5, 5)
+    mesh = UnitSquareMesh(3, 3)
     tmqc = TriangleMeshQualityCalculator(mesh)
     print (tmqc.meshType)
     cStart, cEnd = tmqc.getCellIndices()
