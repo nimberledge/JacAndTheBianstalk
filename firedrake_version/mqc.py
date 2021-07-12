@@ -9,6 +9,10 @@ from petsc4py import PETSc
 CQM = namedtuple('CQM', 'measure, minAngle, aspectRatio, skewness, equiangleSkew, scaledJacobian')
 
 class MeshQualityCalculator(object):
+    VERTEX_DEPTH_STRATUM = 0
+    EDGE_DEPTH_STRATUM = 1
+    FACE_DEPTH_STRATUM = 2
+    HEDRON_DEPTH_STRATUM = 3
 
     '''Enum to represent the different types of mesh.'''
     class MeshType(Enum):
@@ -26,6 +30,10 @@ class MeshQualityCalculator(object):
         self.coordArray = self.plex.getCoordinates().array
         self.meshType = self.__computeMeshType()
 
+    def getCellIndices(self):
+        '''Returns (cStart, cEnd) which are the starting and ending indices for cells in the mesh'''
+        return self.plex.getDepthStratum(self.dim)
+
     def __makeCoordinateMap(self):
         '''Sets up a section for the DMPlex object so that we have a mapping from indices to coordinates'''
         # TODO: See if this needs to be changed for higher dimensions than 2
@@ -37,6 +45,7 @@ class MeshQualityCalculator(object):
         sec.setFieldName(0, 'Coordinates')
         sec.setUp()
         self.plex.setSection(sec)
+        self.sec = sec
 
     def __computeMeshType(self):
         sampleCell = self.plex.getDepthStratum(self.dim)[0]
@@ -56,6 +65,16 @@ class MeshQualityCalculator(object):
 
         return self.MeshType.UNKNOWN
 
+    def getCellQualityMeasures(self, c):
+        raise NotImplementedError('getCellQualityMeasures implemented in sub-classes only')
+
+    @staticmethod
+    def distance(p1, p2):
+        if p1.shape[0] != p2.shape[0]:
+            return ValueError
+
+        return np.sqrt(np.sum([(p1[i] - p2[i])**2 for i in range(p1.shape[0])]))
+
     def __repr__(self):
         return str(self.__dict__)
 
@@ -63,8 +82,8 @@ class MeshQualityCalculator(object):
 def test_main():
     print ("Firedrake successfully imported")
     pp = pprint.PrettyPrinter(indent=4)
-    # mesh = UnitSquareMesh(2, 2)
-    mesh = UnitTetrahedronMesh()
+    mesh = UnitSquareMesh(2, 2)
+    # mesh = UnitTetrahedronMesh()
     # pp.pprint(mesh._ufl_coordinate_element._sub_element)
     mqc = MeshQualityCalculator(mesh)
     print (mqc.meshType)
