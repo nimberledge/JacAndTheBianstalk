@@ -59,37 +59,56 @@ class TetrahedronMeshQualityCalculator(MeshQualityCalculator):
             (dist12 * dist34 - dist13 * dist24 + dist14*dist23) * \
             (-dist12 * dist34 + dist13 * dist24 + dist14*dist23)) / (24 * volume)
         
-        edgeSum1 = (dist23 + dist24 + dist34) / 2       # s in Heron's formula
-        faceArea1 = np.sqrt(edgeSum1 * (edgeSum1 - dist23) * (edgeSum1 - dist24) * (edgeSum1 - dist34))
         # faceAreaN = area of face opposite vertex N
+        # edgeSumN = s in Heron's formula but for each face separately
+        edgeSum1 = (dist23 + dist24 + dist34) / 2
+        faceArea1 = np.sqrt(edgeSum1 * (edgeSum1 - dist23) * (edgeSum1 - dist24) * (edgeSum1 - dist34))
         edgeSum2 = (dist13 + dist14 + dist34) / 2       
         faceArea2 = np.sqrt(edgeSum2 * (edgeSum2 - dist13) * (edgeSum2 - dist14) * (edgeSum2 - dist34))
         edgeSum3 = (dist12 + dist14 + dist24) / 2       
         faceArea3 = np.sqrt(edgeSum3 * (edgeSum3 - dist12) * (edgeSum3 - dist14) * (edgeSum3 - dist24))
         edgeSum4 = (dist12 + dist23 + dist13) / 2       
         faceArea4 = np.sqrt(edgeSum4 * (edgeSum4 - dist12) * (edgeSum4 - dist23) * (edgeSum4 - dist13))
+        
         inRadius = 3 * volume / (faceArea1 + faceArea2 + faceArea3 + faceArea4)
 
         # https://cubit.sandia.gov/15.5/help_manual/WebHelp/mesh_generation/mesh_quality_assessment/tetrahedral_metrics.htm
         # Link above describes the aspectRatioBeta which we take as our aspect ratio
         aspectRatio = circumRadius / (3 * inRadius)
+        # angleij -> angle at vertex i, on the face opposite to vertex j
+        # These are angles subtended by vertices at the faces of the hedron, each belonging to its own triangle
+        angle12 = np.arccos(np.dot(vec13, vec14) / (dist13 * dist14))
+        angle13 = np.arccos(np.dot(vec12, vec14) / (dist12 * dist14))
+        angle14 = np.arccos(np.dot(vec12, vec13) / (dist12 * dist13))
+        angle21 = np.arccos(np.dot(vec23, vec24) / (dist23 * dist24))
+        angle23 = np.arccos(np.dot(-vec12, vec24) / (dist12 * dist24))
+        angle24 = np.arccos(np.dot(-vec12, vec23) / (dist12 * dist23))
+        angle31 = np.arccos(np.dot(-vec23, vec34) / (dist23 * dist34))
+        angle32 = np.arccos(np.dot(-vec13, vec34) / (dist13 * dist34))
+        angle34 = np.arccos(np.dot(-vec13, -vec23) / (dist13 * dist23))
+        angle41 = np.arccos(np.dot(-vec24, -vec34) / (dist24 * dist34))
+        angle42 = np.arccos(np.dot(-vec14, -vec34) / (dist14 * dist34))
+        angle43 = np.arccos(np.dot(-vec14, -vec24) / (dist14 * dist24))
         
-        minAngle = 0
+        minAngle = min(angle12, angle13, angle14, angle21, angle23, angle24, angle31, angle32, angle34, angle41, angle42, angle43)
+        maxAngle = max(angle12, angle13, angle14, angle21, angle23, angle24, angle31, angle32, angle34, angle41, angle42, angle43)
+        idealAngle = np.pi / 3         # This is still the ideal angle as the faces of a regular tetrahedron are regular triangles
+        equiangleSkew = max( (maxAngle - idealAngle) / (np.pi - idealAngle),\
+         (idealAngle - minAngle) / idealAngle)
+        
         skewness = 0
-        equiangleSkew = 0
-
         return CQM(volume, minAngle, aspectRatio, skewness, equiangleSkew, scaledJacobian)
 
 
 def test_main():
     print ("Firedrake successfully imported")
-    mesh = UnitCubeMesh(2, 2, 2)
+    mesh = UnitCubeMesh(5, 5, 5)
     tmqc = TetrahedronMeshQualityCalculator(mesh)
-    print (tmqc.meshType)
+    print ("Mesh type: {}".format(tmqc.meshType))
     cStart, cEnd = tmqc.getCellIndices()
-    print (cStart, cEnd)
+    print ("cStart: {} cEnd: {}".format(cStart, cEnd))
     for c in range(cStart, cEnd):
-        print (tmqc.getCellQualityMeasures(c))
+        print (c, tmqc.getCellQualityMeasures(c))
 
 if __name__ == '__main__':
     test_main()
