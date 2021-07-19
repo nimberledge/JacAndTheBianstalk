@@ -35,7 +35,7 @@ def visualize_2dmesh(mesh, fig=None, dim=2):
 
 def test_main():
     print ("Firedrake successfully imported")
-    mesh = UnitSquareMesh(2, 2)
+    mesh = UnitSquareMesh(5, 10, quadrilateral=True)
     dim = 2
     fig = visualize_2dmesh(mesh)
     plt.show()

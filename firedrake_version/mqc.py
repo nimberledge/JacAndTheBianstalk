@@ -65,7 +65,7 @@ class MeshQualityCalculator(object):
 
         return self.MeshType.UNKNOWN
 
-    def getCellQualityMeasures(self, c):
+    def getCellQualityMeasures(self, index):
         raise NotImplementedError('getCellQualityMeasures implemented in sub-classes only')
 
     @staticmethod
