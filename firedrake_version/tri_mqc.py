@@ -46,7 +46,7 @@ class TriangleMeshQualityCalculator(MeshQualityCalculator):
 
         # Get angles at vertices
         a1 = np.arccos(np.dot(vec12, vec13) / (dist12 * dist13))
-        a2 = np.arccos(np.dot(vec12, -vec23) / (dist12 * dist23))
+        a2 = np.arccos(np.dot(-vec12, vec23) / (dist12 * dist23))
         a3 = np.arccos(np.dot(-vec13, -vec23) / (dist13 * dist23))
         minAngle = min(a1, a2, a3)
         maxAngle = max(a1, a2, a3)
