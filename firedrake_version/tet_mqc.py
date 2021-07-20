@@ -96,19 +96,98 @@ class TetrahedronMeshQualityCalculator(MeshQualityCalculator):
         equiangleSkew = max( (maxAngle - idealAngle) / (np.pi - idealAngle),\
          (idealAngle - minAngle) / idealAngle)
         
-        skewness = 0
+        # Calculating in accordance with https://www.engmorph.com/skewness-finite-elemnt
+        # To extend to 3D case, drop a line from a vertex to opposite face centroid (line L)
+        # Join midpoints of non-face edges, plane spanned by those is Q
+        # Consider angles subtended by L at Q for skewness calculation
+
+        # Calculate midpoints of sides
+        midPoint12 = v1 + (vec12 / 2)
+        midPoint13 = v1 + (vec13 / 2)
+        midPoint14 = v1 + (vec14 / 2)
+        midPoint23 = v2 + (vec23 / 2)
+        midPoint24 = v2 + (vec24 / 2)
+        midPoint34 = v3 + (vec34 / 2)
+
+        # Calculate lines from vertices to face centroids
+        faceCentroid1 = (v2 + v3 + v4) / 3
+        faceCentroid2 = (v1 + v3 + v4) / 3
+        faceCentroid3 = (v1 + v2 + v4) / 3
+        faceCentroid4 = (v1 + v2 + v3) / 3
+        vertexToFaceLine1 = faceCentroid1 - v1
+        vertexToFaceLine2 = faceCentroid2 - v2
+        vertexToFaceLine3 = faceCentroid3 - v3
+        vertexToFaceLine4 = faceCentroid4 - v4
+
+        # We calculate the normals of midpoint planes
+        planeNormal1 = np.cross((midPoint12 - midPoint13), (midPoint12 - midPoint14))
+        planeNormal2 = np.cross((midPoint12 - midPoint13), (midPoint12 - midPoint14))
+        planeNormal3 = np.cross((midPoint12 - midPoint13), (midPoint12 - midPoint14))
+        planeNormal4 = np.cross((midPoint12 - midPoint13), (midPoint12 - midPoint14))
+
+        # Now, normalize to length = 1  and calculate angle
+        # Distance of a vector to origin is the magnitude
+        origin = np.zeros(v1.shape)
+        planeNormal1 /= self.distance(planeNormal1, origin)
+        planeNormal2 /= self.distance(planeNormal2, origin)
+        planeNormal3 /= self.distance(planeNormal3, origin)
+        planeNormal4 /= self.distance(planeNormal4, origin)
+        vertexToFaceLine1 /= self.distance(vertexToFaceLine1, origin)
+        vertexToFaceLine2 /= self.distance(vertexToFaceLine2, origin)
+        vertexToFaceLine3 /= self.distance(vertexToFaceLine3, origin)
+        vertexToFaceLine4 /= self.distance(vertexToFaceLine4, origin)
+
+        # This is the angle between the normal and the line. We need pi/2 - angle
+        # as the angle subtended at the plane
+        # Unless angle > pi/2 then we need angle - pi/2
+        theta1 = np.arccos(np.dot(planeNormal1, vertexToFaceLine1))
+        if theta1 >= np.pi / 2:
+            theta1 = theta1 - np.pi / 2
+        else:
+            theta1 = np.pi / 2 - theta1
+        theta2 = np.pi - theta1
+
+        theta3 = np.arccos(np.dot(planeNormal2, vertexToFaceLine2))
+        if theta3 >= np.pi / 2:
+            theta3 = theta3 - np.pi / 2
+        else:
+            theta3 = np.pi / 2 - theta3
+        theta4 = np.pi - theta3
+        
+        theta5 = np.arccos(np.dot(planeNormal3, vertexToFaceLine3))
+        if theta5 >= np.pi / 2:
+            theta5 = theta5 - np.pi / 2
+        else:
+            theta5 = np.pi / 2 - theta5
+        theta6 = np.pi - theta5
+
+        theta7 = np.arccos(np.dot(planeNormal4, vertexToFaceLine4))
+        if theta7 >= np.pi / 2:
+            theta7 = theta7 - np.pi / 2
+        else:
+            theta7 = np.pi / 2 - theta7
+        theta8 = np.pi - theta7
+        
+        skewness = (np.pi / 2) - min(theta1, theta2, theta3, theta4, theta5, theta6, theta7, theta8)
+        
         return CQM(volume, minAngle, aspectRatio, skewness, equiangleSkew, scaledJacobian)
 
 
 def test_main():
-    print ("Firedrake successfully imported")
-    mesh = UnitCubeMesh(5, 5, 5)
+    mesh = UnitCubeMesh(2, 2, 2)
     tmqc = TetrahedronMeshQualityCalculator(mesh)
     print ("Mesh type: {}".format(tmqc.meshType))
     cStart, cEnd = tmqc.getCellIndices()
     print ("cStart: {} cEnd: {}".format(cStart, cEnd))
+    volumeSum = 0
     for c in range(cStart, cEnd):
-        print (c, tmqc.getCellQualityMeasures(c))
+        cqm = tmqc.getCellQualityMeasures(c)
+        print ("{}\t{}".format(c, tmqc.printCQM(cqm)))
+        volumeSum += cqm.measure
+    
+    # print ("Volume sum: {}".format(volumeSum))
+    tolerance = 10**(-6)
+    assert np.absolute(volumeSum - 1) < tolerance
 
 if __name__ == '__main__':
     test_main()

@@ -89,13 +89,19 @@ class TriangleMeshQualityCalculator(MeshQualityCalculator):
         return CQM(area, minAngle, aspectRatio, skewness, equiangleSkew, scaledJacobian)
 
 def test_main():
-    print ("Firedrake successfully imported")
     mesh = UnitSquareMesh(3, 3)
     tmqc = TriangleMeshQualityCalculator(mesh)
-    print (tmqc.meshType)
+    print ("Mesh type: {}".format(tmqc.meshType))
     cStart, cEnd = tmqc.getCellIndices()
+    print ("cStart: {} cEnd: {}".format(cStart, cEnd))
+    areaSum = 0
     for c in range(cStart, cEnd):
-        print (tmqc.getCellQualityMeasures(c))
+        cqm = tmqc.getCellQualityMeasures(c)
+        print ("{}\t{}".format(c, tmqc.printCQM(cqm)))
+        areaSum += cqm.measure
+    
+    tolerance = 10**(-6)
+    assert np.absolute(areaSum - 1) < tolerance
 
 if __name__ == '__main__':
     test_main()
