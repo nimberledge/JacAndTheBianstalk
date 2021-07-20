@@ -74,6 +74,16 @@ class MeshQualityCalculator(object):
             return ValueError
 
         return np.sqrt(np.sum([(p1[i] - p2[i])**2 for i in range(p1.shape[0])]))
+    
+    @staticmethod
+    def printCQM(cqm):
+        cqm_dict = cqm._asdict()
+        cqm_keys = cqm_dict.keys()
+        retval = '('
+        for k in cqm_keys:
+            retval += '{}: {:.4f}, '.format(k, cqm_dict[k])
+        retval = retval.rstrip(', ') + ')'
+        return retval
 
     def __repr__(self):
         return str(self.__dict__)
