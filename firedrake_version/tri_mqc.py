@@ -89,8 +89,10 @@ class TriangleMeshQualityCalculator(MeshQualityCalculator):
         return CQM(area, minAngle, aspectRatio, skewness, equiangleSkew, scaledJacobian)
 
 def test_main():
-    mesh = UnitSquareMesh(3, 3)
+    m, n = 4, 4
+    mesh = UnitSquareMesh(m, n)
     tmqc = TriangleMeshQualityCalculator(mesh)
+    print ("m, n: {}, {}".format(m, n))
     print ("Mesh type: {}".format(tmqc.meshType))
     cStart, cEnd = tmqc.getCellIndices()
     print ("cStart: {} cEnd: {}".format(cStart, cEnd))
