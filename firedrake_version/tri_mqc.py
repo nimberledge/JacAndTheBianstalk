@@ -2,6 +2,7 @@ from mqc import CQM, MeshQualityCalculator
 from firedrake import *
 from petsc4py import PETSc
 import numpy as np
+import time
 
 class TriangleMeshQualityCalculator(MeshQualityCalculator):
 
@@ -89,7 +90,7 @@ class TriangleMeshQualityCalculator(MeshQualityCalculator):
         return CQM(area, minAngle, aspectRatio, skewness, equiangleSkew, scaledJacobian)
 
 def test_main():
-    m, n = 4, 4
+    m, n = 40, 40
     mesh = UnitSquareMesh(m, n)
     tmqc = TriangleMeshQualityCalculator(mesh)
     print ("m, n: {}, {}".format(m, n))
@@ -97,11 +98,15 @@ def test_main():
     cStart, cEnd = tmqc.getCellIndices()
     print ("cStart: {} cEnd: {}".format(cStart, cEnd))
     areaSum = 0
+    totalTime = 0
     for c in range(cStart, cEnd):
+        start = time.time()
         cqm = tmqc.getCellQualityMeasures(c)
+        totalTime += time.time() - start
         print ("{}\t{}".format(c, tmqc.printCQM(cqm)))
         areaSum += cqm.measure
     
+    print ("Time taken: {}s".format(totalTime))
     tolerance = 10**(-6)
     assert np.absolute(areaSum - 1) < tolerance
 
