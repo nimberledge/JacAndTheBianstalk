@@ -362,9 +362,10 @@ def main():
     cqms[:, 5] = scaledJacobians.dat.data[:, 0]
     
     print ("Mesh size: {} x {}".format(m, n))
-    print ("Area\t\tMin Angle\tAspectRatio\tSkewness\tEquiangle skew\tScaled Jacobian")
-    for r in range(cqms.shape[0]):
-        print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
+    print ("Number of cells: {}".format(areas.dat.data.shape[0]))
+    # print ("Area\t\tMin Angle\tAspectRatio\tSkewness\tEquiangle skew\tScaled Jacobian")
+    # for r in range(cqms.shape[0]):
+    #     print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
     print ("Time taken: {}s".format(timeTaken))
     
 if __name__ == '__main__':
