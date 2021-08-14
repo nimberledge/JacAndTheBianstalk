@@ -11,9 +11,9 @@ def main():
         native Python (with numpy) vs using a C-kernel and Firedrake par_loops. Meshes are \
         2D triangular meshes on the Unit Square with identical elements. \
         Values of CQM should be equal for all elements.')
-    parser.add_argument('-m', default=50, type=int, help='Number of cells in the x-direction')
-    parser.add_argument('-n', default=50, type=int, help='Number of cells in the y-direction')
-    parser.add_argument('-N', default=20, type=int, help='Number of trials for benchmark')
+    parser.add_argument('-m', default=50, type=int, help='Number of cells in the x-direction (default: 50)')
+    parser.add_argument('-n', default=50, type=int, help='Number of cells in the y-direction (default: 50)')
+    parser.add_argument('-N', default=20, type=int, help='Number of trials run for benchmark (default: 20)')
     args = parser.parse_args()
     m, n, num_trials = args.m, args.n, args.N
     
