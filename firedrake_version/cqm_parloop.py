@@ -4,7 +4,7 @@ import time
 def computeArea(mesh, P0=None):
     '''Computes the area of each element of a triangular 2D mesh using a C kernel'''
     if P0 is None:
-        P0 = VectorFunctionSpace(mesh, "Discontinuous Lagrange", 0)
+        P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
     
     coords = mesh.coordinates
     areas = Function(P0)
@@ -27,7 +27,7 @@ def computeArea(mesh, P0=None):
 def computeMinAngle(mesh, P0=None):
     '''Computes the minimum angle of each element of a triangular 2D mesh using a C kernel'''
     if P0 is None:
-        P0 = VectorFunctionSpace(mesh, "Discontinuous Lagrange", 0)
+        P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
     
     coords = mesh.coordinates
     minAngles = Function(P0)
@@ -59,7 +59,7 @@ def computeMinAngle(mesh, P0=None):
 def computeAspectRatio(mesh, P0=None):
     '''Computes the aspect ratio of each element of a triangular 2D mesh using a C kernel'''
     if P0 is None:
-        P0 = VectorFunctionSpace(mesh, "Discontinuous Lagrange", 0)
+        P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
     
     coords = mesh.coordinates
     aspectRatios = Function(P0)
@@ -82,7 +82,7 @@ def computeAspectRatio(mesh, P0=None):
 def computeEquiangleSkew(mesh, P0=None):
     '''Computes the equiangle skew of each element of a triangular 2D mesh using a C kernel'''
     if P0 is None:
-        P0 = VectorFunctionSpace(mesh, "Discontinuous Lagrange", 0)
+        P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
     
     coords = mesh.coordinates
     equiangleSkews = Function(P0)
@@ -119,7 +119,7 @@ def computeEquiangleSkew(mesh, P0=None):
 def computeScaledJacobian(mesh, P0=None):
     '''Computes the scaled Jacobian of each element of a triangular 2D mesh using a C kernel'''
     if P0 is None:
-        P0 = VectorFunctionSpace(mesh, "Discontinuous Lagrange", 0)
+        P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
     
     coords = mesh.coordinates
     scaledJacobians = Function(P0)
@@ -151,7 +151,7 @@ def computeScaledJacobian(mesh, P0=None):
 def computeSkewness(mesh, P0=None):
     '''Computes the skewness of each element of a triangular 2D mesh using a C kernel'''
     if P0 is None:
-        P0 = VectorFunctionSpace(mesh, "Discontinuous Lagrange", 0)
+        P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
     
     coords = mesh.coordinates
     skews = Function(P0)
@@ -230,7 +230,7 @@ def getCQM(mesh, P0=None):
     5. Skewness
     6. Scaled Jacobian'''
     if P0 is None:
-        P0 = VectorFunctionSpace(mesh, "Discontinuous Lagrange", 0)
+        P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
     
     coords = mesh.coordinates
     areas = Function(P0)
@@ -340,7 +340,7 @@ def getCQM(mesh, P0=None):
     return (areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians)
 
 def main():
-    m,n = 40, 40
+    m,n = 4, 4
     mesh = UnitSquareMesh(m, n)
     # areas = computeArea(mesh)
     # minAngles = computeMinAngle(mesh)
@@ -354,18 +354,18 @@ def main():
     timeTaken = time.time() - start
     cqms = np.zeros((areas.dat.data.shape[0], 6))
     
-    cqms[:, 0] = areas.dat.data[:, 0]
-    cqms[:, 1] = minAngles.dat.data[:, 0]
-    cqms[:, 2] = aspectRatios.dat.data[:, 0]
-    cqms[:, 3] = skews.dat.data[:, 0]
-    cqms[:, 4] = equiangleSkews.dat.data[:, 0]
-    cqms[:, 5] = scaledJacobians.dat.data[:, 0]
+    cqms[:, 0] = areas.dat.data
+    cqms[:, 1] = minAngles.dat.data
+    cqms[:, 2] = aspectRatios.dat.data
+    cqms[:, 3] = skews.dat.data
+    cqms[:, 4] = equiangleSkews.dat.data
+    cqms[:, 5] = scaledJacobians.dat.data
     
     print ("Mesh size: {} x {}".format(m, n))
     print ("Number of cells: {}".format(areas.dat.data.shape[0]))
-    # print ("Area\t\tMin Angle\tAspectRatio\tSkewness\tEquiangle skew\tScaled Jacobian")
-    # for r in range(cqms.shape[0]):
-    #     print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
+    print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tScaled Jacobian")
+    for r in range(cqms.shape[0]):
+        print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
     print ("Time taken: {}s".format(timeTaken))
     
 if __name__ == '__main__':
