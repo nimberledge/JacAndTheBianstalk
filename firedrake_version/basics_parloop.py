@@ -56,7 +56,7 @@ def main():
     }
     """
     kernel = op2.Kernel(kernel, "get_eigendecomposition", cpp=True, include_dirs=include_dirs)
-    op2.par_loop(kernel, P0_ten.node_set, evecs.dat(op2.RW), evals.dat(op2.RW), M.dat(op2.READ))
+    op2.par_loop(kernel, P0.node_set, evecs.dat(op2.RW), evals.dat(op2.RW), M.dat(op2.READ))
     print(evecs.dat.data[0])
     print(evals.dat.data[0])
 
