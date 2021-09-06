@@ -18,20 +18,49 @@ def getMinAngle(mesh, include_dirs, P0=None, P0_ten=None, P0_vec=None):
         P0_vec = VectorFunctionSpace(mesh, "DG", 0)
     
     coords = mesh.coordinates
-    print (type(coords))
+    P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
+    V1 = Function(P0_vec)
+    V2 = Function(P0_vec)
+    V3 = Function(P0_vec)
+    vertKernel = """
+    V1[0] = coords[0];
+    V1[1] = coords[1];
+    V2[0] = coords[2];
+    V2[1] = coords[3];
+    V3[0] = coords[4];
+    V3[1] = coords[5];
+    """
+    par_loop(vertKernel, dx, {'coords': (coords, READ), 'V1': (V1, RW), 'V2': (V2, RW), 'V3': (V3, RW)})
     minAngles = Function(P0)
-    kernel="""
+    cqmKernel = """
     #include <Eigen/Dense>
 
     using namespace Eigen;
 
-    void getMinAngles(double *coords ,double *minAngles) {
-        Vector2d v1(coords[0], coords[1]);
-        minAngles[0] = v1.dot(v1);
-    }    
+    double distance(Vector2d p1, Vector2d p2) {
+        return sqrt ( pow(p1[0] - p2[0], 2) + pow(p1[1] - p2[1], 2) );
+    }
+
+    void getMinAngles(const double V1_[2], const double V2_[2], const double V3_[2], double *minAngles) {
+        // Map vertices as vectors
+        Vector2d V1(V1_[0], V1_[1]);
+        Vector2d V2(V2_[0], V2_[1]);
+        Vector2d V3(V3_[0], V3_[1]);
+
+        Vector2d V12 = V2 - V1;
+        Vector2d V13 = V3 - V1;
+        Vector2d V23 = V3 - V2;
+
+        double a1 = acos (V12.dot(V13) / (distance(V1, V2) * distance(V1, V3)));
+        double a2 = acos (-V12.dot(V23) / (distance(V1, V2) * distance(V2, V3)));
+        double a3 = acos (V23.dot(V13) / (distance(V2, V3) * distance(V1, V3)));
+
+        double aMin = std::min(a1, a2);
+        minAngles[0] = std::min(aMin, a3);
+    }
     """
-    cppKernel = op2.Kernel(kernel, "getMinAngles", cpp=True, include_dirs=include_dirs)
-    op2.par_loop(cppKernel, P0.node_set, coords.dat(op2.RW), minAngles.dat(op2.RW))
+    kernel = op2.Kernel(cqmKernel, "getMinAngles", cpp=True, include_dirs=include_dirs)
+    op2.par_loop(kernel, P0.node_set, V1.dat(op2.READ), V2.dat(op2.READ), V3.dat(op2.READ), minAngles.dat(op2.RW))
     return minAngles
 
 def main():
