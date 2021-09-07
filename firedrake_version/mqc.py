@@ -26,7 +26,6 @@ class MeshQualityCalculator(object):
         self.mesh = mesh
         self.dim = mesh._geometric_dimension
         self.plex = mesh._topology.topology_dm
-        self.plex.distributeOverlap(overlap=1)
         self.__makeCoordinateMap()          # sets self.sec
         self.coordArray = self.plex.getCoordinates().array
         print ("coordArray shape: {}".format(self.coordArray.shape))
