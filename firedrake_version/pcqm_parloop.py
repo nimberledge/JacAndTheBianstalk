@@ -1,7 +1,8 @@
 from firedrake import *
 import time
+import numpy as np
 
-def getCQM(mesh, include_dirs, P0=None, P0_ten=None, P0_vec=None):
+def getCQM(mesh, include_dirs, M=None):
     '''Computes the CQM (Cell Quality Measures) of each element of a triangular 2D mesh using a C kernel.
     CQMs are as follows - 
     1. Area
@@ -10,13 +11,14 @@ def getCQM(mesh, include_dirs, P0=None, P0_ten=None, P0_vec=None):
     4. Equiangle Skew
     5. Skewness
     6. Scaled Jacobian'''
-    if P0 is None:
-        P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
-    if P0_ten is None:
-        P0_ten = TensorFunctionSpace(mesh, "DG", 0)
-    if P0_vec is None:
-        P0_vec = VectorFunctionSpace(mesh, "DG", 0)
+    P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
+    P0_ten = TensorFunctionSpace(mesh, "DG", 0)
+    P1_ten = TensorFunctionSpace(mesh, "DG", 1)
+    P0_vec = VectorFunctionSpace(mesh, "DG", 0)
+    if M is None:
+        M = [[-1, 1], [0, 2]]
     
+    tensor = interpolate(as_matrix(M), P1_ten)
     coords = mesh.coordinates
     areas = Function(P0)
     minAngles = Function(P0)
@@ -24,8 +26,10 @@ def getCQM(mesh, include_dirs, P0=None, P0_ten=None, P0_vec=None):
     eSkews = Function(P0)
     skews = Function(P0)
     scaledJacobians = Function(P0)
+    metrics = Function(P0)
     cqmKernel = """
     #include <Eigen/Dense>
+    #include <iostream>
 
     using namespace Eigen;
 
@@ -34,14 +38,18 @@ def getCQM(mesh, include_dirs, P0=None, P0_ten=None, P0_vec=None):
     }
 
     void getCQM(double *areas, double *minAngles, double *aspectRatios, double *eSkews,
-                double *skews, double *scaledJacobians, double *coords)
-    {    
+                double *skews, double *scaledJacobians, double *metrics, 
+                const double *T_, double *coords) {    
+        
+        double pi = 3.14159265358979323846;
         // Map vertices as vectors
         Vector2d V1(coords[0], coords[1]);
         Vector2d V2(coords[2], coords[3]);
         Vector2d V3(coords[4], coords[5]);
-        double pi = 3.14159265358979323846;
-
+        // Map tensor function to matrix
+        Map<Matrix<double, 6, 2, RowMajor> > M1((double *)T_);
+        std::cout << "Here is M1" << M1 << std::endl;
+        
         // Precompute some vectors, and distances
         Vector2d V12 = V2 - V1;
         Vector2d V13 = V3 - V1;
@@ -50,6 +58,9 @@ def getCQM(mesh, include_dirs, P0=None, P0_ten=None, P0_vec=None):
         double d13 = distance(V1, V3);
         double d23 = distance(V2, V3);
         double s = (d12 + d23 + d13) / 2;
+
+        // Calculate metric based on formula
+        metrics[0] = 9.189;
 
         // Scaled Jacobian
         // TODO: Maybe refactor this into having a determinant calculation...
@@ -108,8 +119,9 @@ def getCQM(mesh, include_dirs, P0=None, P0_ten=None, P0_vec=None):
     kernel = op2.Kernel(cqmKernel, "getCQM", cpp=True, include_dirs=include_dirs)
     op2.par_loop(kernel, mesh.cell_set, areas.dat(op2.WRITE, areas.cell_node_map()), minAngles.dat(op2.WRITE, minAngles.cell_node_map()),\
             aspectRatios.dat(op2.WRITE, aspectRatios.cell_node_map()), eSkews.dat(op2.WRITE, eSkews.cell_node_map()), skews.dat(op2.WRITE,\
-            skews.cell_node_map()), scaledJacobians.dat(op2.WRITE, scaledJacobians.cell_node_map()), coords.dat(op2.READ, coords.cell_node_map()))
-    return (areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians)
+            skews.cell_node_map()), scaledJacobians.dat(op2.WRITE, scaledJacobians.cell_node_map()), metrics.dat(op2.WRITE, metrics.cell_node_map()), \
+            tensor.dat(op2.READ, tensor.cell_node_map()), coords.dat(op2.READ, coords.cell_node_map()))
+    return (areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians, metrics)
 
 def main():
     try:
@@ -119,7 +131,7 @@ def main():
         PETSC_ARCH = os.path.join(os.environ.get('PETSC_DIR'), os.environ.get('PETSC_ARCH'))
     include_dirs = ["%s/include/eigen3" % PETSC_ARCH]
     print ("Firedrake successfully imported")
-    m,n = 500, 500
+    m,n = 3, 3
     mesh = UnitSquareMesh(m, n)
     # areas = computeArea(mesh)
     # minAngles = computeMinAngle(mesh)
@@ -129,9 +141,9 @@ def main():
     # skews = computeSkewness(mesh)
 
     start = time.time()
-    areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians = getCQM(mesh, include_dirs=include_dirs)
+    areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians, metrics = getCQM(mesh, include_dirs=include_dirs)
     timeTaken = time.time() - start
-    cqms = np.zeros((areas.dat.data.shape[0], 6))
+    cqms = np.zeros((areas.dat.data.shape[0], 7))
     
     cqms[:, 0] = areas.dat.data
     cqms[:, 1] = minAngles.dat.data
@@ -139,12 +151,13 @@ def main():
     cqms[:, 3] = skews.dat.data
     cqms[:, 4] = eSkews.dat.data
     cqms[:, 5] = scaledJacobians.dat.data
+    cqms[:, 6] = metrics.dat.data
     
     print ("Mesh size: {} x {}".format(m, n))
     print ("Number of cells: {}".format(areas.dat.data.shape[0]))
-    # print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tScaled Jacobian")
-    # for r in range(cqms.shape[0]):
-    #     print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
+    print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tScaled Jacobian\tMetric")
+    for r in range(cqms.shape[0]):
+        print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
     print ("Time taken: {}s".format(timeTaken))
 
 if __name__ == '__main__':
