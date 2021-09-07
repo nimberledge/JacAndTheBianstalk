@@ -2,7 +2,7 @@ from firedrake import *
 import time
 import numpy as np
 
-def getCQM(mesh, include_dirs, M=None):
+def getCQM(mesh, include_dirs):
     '''Computes the CQM (Cell Quality Measures) of each element of a triangular 2D mesh using a C kernel.
     CQMs are as follows - 
     1. Area
@@ -13,12 +13,9 @@ def getCQM(mesh, include_dirs, M=None):
     6. Scaled Jacobian'''
     P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
     P0_ten = TensorFunctionSpace(mesh, "DG", 0)
-    P1_ten = TensorFunctionSpace(mesh, "DG", 1)
     P0_vec = VectorFunctionSpace(mesh, "DG", 0)
-    if M is None:
-        M = [[-1, 1], [0, 2]]
     
-    tensor = interpolate(as_matrix(M), P1_ten)
+    
     coords = mesh.coordinates
     areas = Function(P0)
     minAngles = Function(P0)
@@ -26,7 +23,6 @@ def getCQM(mesh, include_dirs, M=None):
     eSkews = Function(P0)
     skews = Function(P0)
     scaledJacobians = Function(P0)
-    metrics = Function(P0)
     cqmKernel = """
     #include <Eigen/Dense>
     #include <iostream>
@@ -38,17 +34,13 @@ def getCQM(mesh, include_dirs, M=None):
     }
 
     void getCQM(double *areas, double *minAngles, double *aspectRatios, double *eSkews,
-                double *skews, double *scaledJacobians, double *metrics, 
-                const double *T_, double *coords) {    
+                double *skews, double *scaledJacobians, double *coords) {    
         
         double pi = 3.14159265358979323846;
         // Map vertices as vectors
         Vector2d V1(coords[0], coords[1]);
         Vector2d V2(coords[2], coords[3]);
         Vector2d V3(coords[4], coords[5]);
-        // Map tensor function to matrix
-        Map<Matrix<double, 6, 2, RowMajor> > M1((double *)T_);
-        std::cout << "Here is M1" << M1 << std::endl;
         
         // Precompute some vectors, and distances
         Vector2d V12 = V2 - V1;
@@ -59,8 +51,6 @@ def getCQM(mesh, include_dirs, M=None):
         double d23 = distance(V2, V3);
         double s = (d12 + d23 + d13) / 2;
 
-        // Calculate metric based on formula
-        metrics[0] = 9.189;
 
         // Scaled Jacobian
         // TODO: Maybe refactor this into having a determinant calculation...
@@ -119,9 +109,83 @@ def getCQM(mesh, include_dirs, M=None):
     kernel = op2.Kernel(cqmKernel, "getCQM", cpp=True, include_dirs=include_dirs)
     op2.par_loop(kernel, mesh.cell_set, areas.dat(op2.WRITE, areas.cell_node_map()), minAngles.dat(op2.WRITE, minAngles.cell_node_map()),\
             aspectRatios.dat(op2.WRITE, aspectRatios.cell_node_map()), eSkews.dat(op2.WRITE, eSkews.cell_node_map()), skews.dat(op2.WRITE,\
-            skews.cell_node_map()), scaledJacobians.dat(op2.WRITE, scaledJacobians.cell_node_map()), metrics.dat(op2.WRITE, metrics.cell_node_map()), \
-            tensor.dat(op2.READ, tensor.cell_node_map()), coords.dat(op2.READ, coords.cell_node_map()))
-    return (areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians, metrics)
+            skews.cell_node_map()), scaledJacobians.dat(op2.WRITE, scaledJacobians.cell_node_map()), coords.dat(op2.READ, coords.cell_node_map()))
+    return (areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians)
+
+def getMetric(mesh, include_dirs, M=None):
+    '''Given a matrix M, a linear function in 2 dimensions, this function outputs
+    the value of the Quality metric Q_M based on the transformation encoded in M.
+    '''
+    # x, y = SpatialCoordinate(mesh)
+    # if M is None:
+    #     M = [[1*x, 0], [0, 1*y]]
+    if M is None:
+        M = [[1, 0], [0, 1]]
+    
+    coords = mesh.coordinates
+    P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
+    P1_ten = TensorFunctionSpace(mesh, "DG", 1)
+    tensor = interpolate(as_matrix(M), P1_ten)
+    metrics = Function(P0)
+    cqmKernel = """
+    #include <Eigen/Dense>
+
+    using namespace Eigen;
+
+    double distance(Vector2d p1, Vector2d p2) {
+        return sqrt ( pow(p1[0] - p2[0], 2) + pow(p1[1] - p2[1], 2) );
+    }
+
+    void getMetric(double *metrics, const double *T_, double *coords) {
+        // Map vertices as vectors
+        Vector2d V1(coords[0], coords[1]);
+        Vector2d V2(coords[2], coords[3]);
+        Vector2d V3(coords[4], coords[5]);
+        
+        // Precompute some vectors, and distances
+        Vector2d V12 = V2 - V1;
+        Vector2d V13 = V3 - V1;
+        Vector2d V23 = V3 - V2;
+        double d12 = distance(V1, V2);
+        double d13 = distance(V1, V3);
+        double d23 = distance(V2, V3);
+        double s = (d12 + d23 + d13) / 2;
+        double area = sqrt(s * (s-d12) * (s-d13) * (s-d23));
+
+        // Map tensor as 2x2 Matrices
+        Map<Matrix<double, 6, 2, RowMajor>> T((double *)T_);
+        Matrix2d M1, M2, M3;
+        M1(0, 0) = T(0, 0);
+        M1(0, 1) = T(0, 1);
+        M1(1, 0) = T(1, 0);
+        M1(1, 1) = T(1, 1);
+        
+        M2(0, 0) = T(2, 0);
+        M2(0, 1) = T(2, 1);
+        M2(1, 0) = T(3, 0);
+        M2(1, 1) = T(3, 1);
+        
+        M3(0, 0) = T(4, 0);
+        M3(0, 1) = T(4, 1);
+        M3(1, 0) = T(5, 0);
+        M3(1, 1) = T(5, 1);
+
+        // Compute M(x, y) at centroid x_c to get area_M
+        Matrix2d Mxc = (M1 + M2 + M3) / 3;
+        double areaM = area * sqrt(Mxc.determinant());
+        
+        // Compute edge lengths in metric
+        double l1 = V23.dot(((M2 + M3)/2) * V23);
+        double l2 = V13.dot(((M1 + M3)/2) * V13);
+        double l3 = V12.dot(((M1 + M2)/2) * V12);
+
+        metrics[0] = sqrt(3) * l1 * l2 * l3 / (2 * areaM);
+    }
+    """
+    kernel = op2.Kernel(cqmKernel, "getMetric", cpp=True, include_dirs=include_dirs)
+    op2.par_loop(kernel, mesh.cell_set, metrics.dat(op2.WRITE, metrics.cell_node_map()), tensor.dat(op2.READ, tensor.cell_node_map()), \
+                 coords.dat(op2.READ, coords.cell_node_map()))
+    return metrics
 
 def main():
     try:
@@ -141,9 +205,10 @@ def main():
     # skews = computeSkewness(mesh)
 
     start = time.time()
-    areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians, metrics = getCQM(mesh, include_dirs=include_dirs)
+    areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians = getCQM(mesh, include_dirs=include_dirs)
     timeTaken = time.time() - start
     cqms = np.zeros((areas.dat.data.shape[0], 7))
+    metrics = getMetric(mesh, include_dirs)
     
     cqms[:, 0] = areas.dat.data
     cqms[:, 1] = minAngles.dat.data
@@ -155,10 +220,11 @@ def main():
     
     print ("Mesh size: {} x {}".format(m, n))
     print ("Number of cells: {}".format(areas.dat.data.shape[0]))
-    print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tScaled Jacobian\tMetric")
+    print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tS. Jacobian\tMetric")
     for r in range(cqms.shape[0]):
         print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
     print ("Time taken: {}s".format(timeTaken))
 
 if __name__ == '__main__':
     main()
+
