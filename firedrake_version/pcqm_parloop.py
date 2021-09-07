@@ -18,19 +18,6 @@ def getCQM(mesh, include_dirs, P0=None, P0_ten=None, P0_vec=None):
         P0_vec = VectorFunctionSpace(mesh, "DG", 0)
     
     coords = mesh.coordinates
-    P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
-    V1 = Function(P0_vec)
-    V2 = Function(P0_vec)
-    V3 = Function(P0_vec)
-    vertKernel = """
-    V1[0] = coords[0];
-    V1[1] = coords[1];
-    V2[0] = coords[2];
-    V2[1] = coords[3];
-    V3[0] = coords[4];
-    V3[1] = coords[5];
-    """
-    par_loop(vertKernel, dx, {'coords': (coords, READ), 'V1': (V1, RW), 'V2': (V2, RW), 'V3': (V3, RW)})
     areas = Function(P0)
     minAngles = Function(P0)
     aspectRatios = Function(P0)
@@ -46,14 +33,13 @@ def getCQM(mesh, include_dirs, P0=None, P0_ten=None, P0_vec=None):
         return sqrt ( pow(p1[0] - p2[0], 2) + pow(p1[1] - p2[1], 2) );
     }
 
-    void getCQM(const double V1_[2], const double V2_[2], const double V3_[2], 
-                double *areas, double *minAngles, double *aspectRatios, double *eSkews,
-                double *skews, double *scaledJacobians)
+    void getCQM(double *areas, double *minAngles, double *aspectRatios, double *eSkews,
+                double *skews, double *scaledJacobians, double *coords)
     {    
         // Map vertices as vectors
-        Vector2d V1(V1_[0], V1_[1]);
-        Vector2d V2(V2_[0], V2_[1]);
-        Vector2d V3(V3_[0], V3_[1]);
+        Vector2d V1(coords[0], coords[1]);
+        Vector2d V2(coords[2], coords[3]);
+        Vector2d V3(coords[4], coords[5]);
         double pi = 3.14159265358979323846;
 
         // Precompute some vectors, and distances
@@ -120,9 +106,9 @@ def getCQM(mesh, include_dirs, P0=None, P0_ten=None, P0_vec=None):
     }
     """
     kernel = op2.Kernel(cqmKernel, "getCQM", cpp=True, include_dirs=include_dirs)
-    op2.par_loop(kernel, P0.node_set, V1.dat(op2.READ), V2.dat(op2.READ), V3.dat(op2.READ), \
-        areas.dat(op2.RW), minAngles.dat(op2.RW), aspectRatios.dat(op2.RW), eSkews.dat(op2.RW), \
-        skews.dat(op2.RW), scaledJacobians.dat(op2.RW))
+    op2.par_loop(kernel, mesh.cell_set, areas.dat(op2.WRITE, areas.cell_node_map()), minAngles.dat(op2.WRITE, minAngles.cell_node_map()),\
+            aspectRatios.dat(op2.WRITE, aspectRatios.cell_node_map()), eSkews.dat(op2.WRITE, eSkews.cell_node_map()), skews.dat(op2.WRITE,\
+            skews.cell_node_map()), scaledJacobians.dat(op2.WRITE, scaledJacobians.cell_node_map()), coords.dat(op2.READ, coords.cell_node_map()))
     return (areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians)
 
 def main():
@@ -133,9 +119,8 @@ def main():
         PETSC_ARCH = os.path.join(os.environ.get('PETSC_DIR'), os.environ.get('PETSC_ARCH'))
     include_dirs = ["%s/include/eigen3" % PETSC_ARCH]
     print ("Firedrake successfully imported")
-    m,n = 2, 2
+    m,n = 500, 500
     mesh = UnitSquareMesh(m, n)
-    print ("Import successful")
     # areas = computeArea(mesh)
     # minAngles = computeMinAngle(mesh)
     # aspectRatios = computeAspectRatio(mesh)
@@ -157,9 +142,9 @@ def main():
     
     print ("Mesh size: {} x {}".format(m, n))
     print ("Number of cells: {}".format(areas.dat.data.shape[0]))
-    print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tScaled Jacobian")
-    for r in range(cqms.shape[0]):
-        print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
+    # print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tScaled Jacobian")
+    # for r in range(cqms.shape[0]):
+    #     print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
     print ("Time taken: {}s".format(timeTaken))
 
 if __name__ == '__main__':
