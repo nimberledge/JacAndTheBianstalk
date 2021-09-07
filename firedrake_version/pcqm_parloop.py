@@ -118,7 +118,7 @@ def getMetric(mesh, include_dirs, M=None):
     '''
     # x, y = SpatialCoordinate(mesh)
     # if M is None:
-    #     M = [[1*x, 0], [0, 1*y]]
+    #     M = [[1*x, 0], [-1*x, 1*y]]
     if M is None:
         M = [[1, 0], [0, 1]]
     
@@ -153,22 +153,9 @@ def getMetric(mesh, include_dirs, M=None):
         double area = sqrt(s * (s-d12) * (s-d13) * (s-d23));
 
         // Map tensor as 2x2 Matrices
-        Map<Matrix<double, 6, 2, RowMajor>> T((double *)T_);
-        Matrix2d M1, M2, M3;
-        M1(0, 0) = T(0, 0);
-        M1(0, 1) = T(0, 1);
-        M1(1, 0) = T(1, 0);
-        M1(1, 1) = T(1, 1);
-        
-        M2(0, 0) = T(2, 0);
-        M2(0, 1) = T(2, 1);
-        M2(1, 0) = T(3, 0);
-        M2(1, 1) = T(3, 1);
-        
-        M3(0, 0) = T(4, 0);
-        M3(0, 1) = T(4, 1);
-        M3(1, 0) = T(5, 0);
-        M3(1, 1) = T(5, 1);
+        Map<Matrix<double, 2, 2, RowMajor>> M1((double *) &T_[0]);
+        Map<Matrix<double, 2, 2, RowMajor>> M2((double *) &T_[4]);
+        Map<Matrix<double, 2, 2, RowMajor>> M3((double *) &T_[8]);
 
         // Compute M(x, y) at centroid x_c to get area_M
         Matrix2d Mxc = (M1 + M2 + M3) / 3;
@@ -179,7 +166,7 @@ def getMetric(mesh, include_dirs, M=None):
         double l2 = V13.dot(((M1 + M3)/2) * V13);
         double l3 = V12.dot(((M1 + M2)/2) * V12);
 
-        metrics[0] = sqrt(3) * l1 * l2 * l3 / (2 * areaM);
+        metrics[0] = sqrt(3) * (l1 + l2 + l3) / (2 * areaM);
     }
     """
     kernel = op2.Kernel(cqmKernel, "getMetric", cpp=True, include_dirs=include_dirs)
@@ -195,20 +182,16 @@ def main():
         PETSC_ARCH = os.path.join(os.environ.get('PETSC_DIR'), os.environ.get('PETSC_ARCH'))
     include_dirs = ["%s/include/eigen3" % PETSC_ARCH]
     print ("Firedrake successfully imported")
-    m,n = 3, 3
+    m,n = 1000, 500
     mesh = UnitSquareMesh(m, n)
-    # areas = computeArea(mesh)
-    # minAngles = computeMinAngle(mesh)
-    # aspectRatios = computeAspectRatio(mesh)
-    # equiangleSkews = computeEquiangleSkew(mesh)
-    # scaledJacobians = computeScaledJacobian(mesh)
-    # skews = computeSkewness(mesh)
-
+    print ("Mesh size: {} x {}".format(m, n))
+    print ("Number of cells: {}".format(2 * m * n))
     start = time.time()
     areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians = getCQM(mesh, include_dirs=include_dirs)
     timeTaken = time.time() - start
     cqms = np.zeros((areas.dat.data.shape[0], 7))
     metrics = getMetric(mesh, include_dirs)
+    
     
     cqms[:, 0] = areas.dat.data
     cqms[:, 1] = minAngles.dat.data
@@ -218,13 +201,11 @@ def main():
     cqms[:, 5] = scaledJacobians.dat.data
     cqms[:, 6] = metrics.dat.data
     
-    print ("Mesh size: {} x {}".format(m, n))
-    print ("Number of cells: {}".format(areas.dat.data.shape[0]))
-    print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tS. Jacobian\tMetric")
-    for r in range(cqms.shape[0]):
-        print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
+    
+    # print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tS. Jacobian\tMetric")
+    # for r in range(cqms.shape[0]):
+    #     print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
     print ("Time taken: {}s".format(timeTaken))
 
 if __name__ == '__main__':
     main()
-
