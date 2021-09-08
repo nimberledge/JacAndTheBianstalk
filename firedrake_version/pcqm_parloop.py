@@ -38,9 +38,9 @@ def getCQM(mesh, include_dirs):
         
         double pi = 3.14159265358979323846;
         // Map vertices as vectors
-        Vector2d V1(coords[0], coords[1]);
-        Vector2d V2(coords[2], coords[3]);
-        Vector2d V3(coords[4], coords[5]);
+        Map<Vector2d> V1((double *) &coords[0]);
+        Map<Vector2d> V2((double *) &coords[2]);
+        Map<Vector2d> V3((double *) &coords[4]);
         
         // Precompute some vectors, and distances
         Vector2d V12 = V2 - V1;
@@ -116,11 +116,11 @@ def getMetric(mesh, include_dirs, M=None):
     '''Given a matrix M, a linear function in 2 dimensions, this function outputs
     the value of the Quality metric Q_M based on the transformation encoded in M.
     '''
-    # x, y = SpatialCoordinate(mesh)
-    # if M is None:
-    #     M = [[1*x, 0], [-1*x, 1*y]]
+    x, y = SpatialCoordinate(mesh)
     if M is None:
-        M = [[1, 0], [0, 1]]
+        M = [[1*x, 0], [-1*x, 1*y]]
+    # if M is None:
+    #     M = [[1, 0], [0, 1]]
     
     coords = mesh.coordinates
     P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
@@ -138,9 +138,9 @@ def getMetric(mesh, include_dirs, M=None):
 
     void getMetric(double *metrics, const double *T_, double *coords) {
         // Map vertices as vectors
-        Vector2d V1(coords[0], coords[1]);
-        Vector2d V2(coords[2], coords[3]);
-        Vector2d V3(coords[4], coords[5]);
+        Map<Vector2d> V1((double *) &coords[0]);
+        Map<Vector2d> V2((double *) &coords[2]);
+        Map<Vector2d> V3((double *) &coords[4]);
         
         // Precompute some vectors, and distances
         Vector2d V12 = V2 - V1;
@@ -153,9 +153,9 @@ def getMetric(mesh, include_dirs, M=None):
         double area = sqrt(s * (s-d12) * (s-d13) * (s-d23));
 
         // Map tensor as 2x2 Matrices
-        Map<Matrix<double, 2, 2, RowMajor>> M1((double *) &T_[0]);
-        Map<Matrix<double, 2, 2, RowMajor>> M2((double *) &T_[4]);
-        Map<Matrix<double, 2, 2, RowMajor>> M3((double *) &T_[8]);
+        Map<Matrix2d> M1((double *) &T_[0]);
+        Map<Matrix2d> M2((double *) &T_[4]);
+        Map<Matrix2d> M3((double *) &T_[8]);
 
         // Compute M(x, y) at centroid x_c to get area_M
         Matrix2d Mxc = (M1 + M2 + M3) / 3;
@@ -182,7 +182,7 @@ def main():
         PETSC_ARCH = os.path.join(os.environ.get('PETSC_DIR'), os.environ.get('PETSC_ARCH'))
     include_dirs = ["%s/include/eigen3" % PETSC_ARCH]
     print ("Firedrake successfully imported")
-    m,n = 1000, 500
+    m,n = 4, 4
     mesh = UnitSquareMesh(m, n)
     print ("Mesh size: {} x {}".format(m, n))
     print ("Number of cells: {}".format(2 * m * n))
@@ -202,9 +202,9 @@ def main():
     cqms[:, 6] = metrics.dat.data
     
     
-    # print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tS. Jacobian\tMetric")
-    # for r in range(cqms.shape[0]):
-    #     print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
+    print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tS. Jacobian\tMetric")
+    for r in range(cqms.shape[0]):
+        print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
     print ("Time taken: {}s".format(timeTaken))
 
 if __name__ == '__main__':
