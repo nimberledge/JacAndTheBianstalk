@@ -1,6 +1,7 @@
 from firedrake import *
 import time
 import numpy as np
+import os
 
 def getCQM(mesh, include_dirs):
     '''Computes the CQM (Cell Quality Measures) of each element of a triangular 2D mesh using a C kernel.
@@ -116,11 +117,11 @@ def getMetric(mesh, include_dirs, M=None):
     '''Given a matrix M, a linear function in 2 dimensions, this function outputs
     the value of the Quality metric Q_M based on the transformation encoded in M.
     '''
-    x, y = SpatialCoordinate(mesh)
-    if M is None:
-        M = [[1*x, 0], [-1*x, 1*y]]
+    # x, y = SpatialCoordinate(mesh)
     # if M is None:
-    #     M = [[1, 0], [0, 1]]
+    #     M = [[1*x, 0], [-1*x, 1*y]]
+    if M is None:
+        M = [[1, 0], [0, 1]]
     
     coords = mesh.coordinates
     P0 = FunctionSpace(mesh, "Discontinuous Lagrange", 0)
@@ -128,48 +129,13 @@ def getMetric(mesh, include_dirs, M=None):
     tensor = interpolate(as_matrix(M), P1_ten)
     metrics = Function(P0)
     cqmKernel = """
-    #include <Eigen/Dense>
+    #include "meshquality.h"
 
-    using namespace Eigen;
-
-    double distance(Vector2d p1, Vector2d p2) {
-        return sqrt ( pow(p1[0] - p2[0], 2) + pow(p1[1] - p2[1], 2) );
-    }
-
-    void getMetric(double *metrics, const double *T_, double *coords) {
-        // Map vertices as vectors
-        Map<Vector2d> V1((double *) &coords[0]);
-        Map<Vector2d> V2((double *) &coords[2]);
-        Map<Vector2d> V3((double *) &coords[4]);
-        
-        // Precompute some vectors, and distances
-        Vector2d V12 = V2 - V1;
-        Vector2d V13 = V3 - V1;
-        Vector2d V23 = V3 - V2;
-        double d12 = distance(V1, V2);
-        double d13 = distance(V1, V3);
-        double d23 = distance(V2, V3);
-        double s = (d12 + d23 + d13) / 2;
-        double area = sqrt(s * (s-d12) * (s-d13) * (s-d23));
-
-        // Map tensor as 2x2 Matrices
-        Map<Matrix2d> M1((double *) &T_[0]);
-        Map<Matrix2d> M2((double *) &T_[4]);
-        Map<Matrix2d> M3((double *) &T_[8]);
-
-        // Compute M(x, y) at centroid x_c to get area_M
-        Matrix2d Mxc = (M1 + M2 + M3) / 3;
-        double areaM = area * sqrt(Mxc.determinant());
-        
-        // Compute edge lengths in metric
-        double l1 = V23.dot(((M2 + M3)/2) * V23);
-        double l2 = V13.dot(((M1 + M3)/2) * V13);
-        double l3 = V12.dot(((M1 + M2)/2) * V12);
-
-        metrics[0] = sqrt(3) * (l1 + l2 + l3) / (2 * areaM);
+    void doGetMetric(double *metrics, const double *T_, double *coords) {
+        getMetric(metrics, T_, coords);
     }
     """
-    kernel = op2.Kernel(cqmKernel, "getMetric", cpp=True, include_dirs=include_dirs)
+    kernel = op2.Kernel(cqmKernel, "doGetMetric", cpp=True, include_dirs=include_dirs)
     op2.par_loop(kernel, mesh.cell_set, metrics.dat(op2.WRITE, metrics.cell_node_map()), tensor.dat(op2.READ, tensor.cell_node_map()), \
                  coords.dat(op2.READ, coords.cell_node_map()))
     return metrics
@@ -178,34 +144,38 @@ def main():
     try:
         from firedrake.slate.slac.compiler import PETSC_ARCH
     except ImportError:
-        import os
         PETSC_ARCH = os.path.join(os.environ.get('PETSC_DIR'), os.environ.get('PETSC_ARCH'))
     include_dirs = ["%s/include/eigen3" % PETSC_ARCH]
+    cwd = os.getcwd()
+
+    cpp_include_dir = cwd + "/cpp_include/"
+    include_dirs.append(cpp_include_dir)
     print ("Firedrake successfully imported")
-    m,n = 4, 4
+    
+    m,n = 5, 5
     mesh = UnitSquareMesh(m, n)
     print ("Mesh size: {} x {}".format(m, n))
     print ("Number of cells: {}".format(2 * m * n))
     start = time.time()
-    areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians = getCQM(mesh, include_dirs=include_dirs)
+    # areas, minAngles, aspectRatios, eSkews, skews, scaledJacobians = getCQM(mesh, include_dirs=include_dirs)
     timeTaken = time.time() - start
-    cqms = np.zeros((areas.dat.data.shape[0], 7))
+    # cqms = np.zeros((areas.dat.data.shape[0], 7))
     metrics = getMetric(mesh, include_dirs)
+    print (metrics.dat.data)
+    
+    # cqms[:, 0] = areas.dat.data
+    # cqms[:, 1] = minAngles.dat.data
+    # cqms[:, 2] = aspectRatios.dat.data
+    # cqms[:, 3] = skews.dat.data
+    # cqms[:, 4] = eSkews.dat.data
+    # cqms[:, 5] = scaledJacobians.dat.data
+    # cqms[:, 6] = metrics.dat.data
     
     
-    cqms[:, 0] = areas.dat.data
-    cqms[:, 1] = minAngles.dat.data
-    cqms[:, 2] = aspectRatios.dat.data
-    cqms[:, 3] = skews.dat.data
-    cqms[:, 4] = eSkews.dat.data
-    cqms[:, 5] = scaledJacobians.dat.data
-    cqms[:, 6] = metrics.dat.data
-    
-    
-    print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tS. Jacobian\tMetric")
-    for r in range(cqms.shape[0]):
-        print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
-    print ("Time taken: {}s".format(timeTaken))
+    # print ("Area\t\tMin Angle\tAspect Ratio\tSkewness\tEq. skew\tS. Jacobian\tMetric")
+    # for r in range(cqms.shape[0]):
+    #     print ('\t'.join(["{:.6f}".format(k) for k in cqms[r, :]]))
+    # print ("Time taken: {}s".format(timeTaken))
 
 if __name__ == '__main__':
     main()
