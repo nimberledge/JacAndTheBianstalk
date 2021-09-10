@@ -113,3 +113,63 @@ void getMetric(double *metrics, const double *T_, double *coords) {
 
     metrics[0] = sqrt(3) * (L1 + L2 + L3) / (2 * areaM);
 }
+
+void mapMatrix3d(Matrix3d M, Vector3d V1, Vector3d V2, Vector3d V3) {
+    /** Construct a 3x3 matrix with rows as per V1, V2, V3.
+     * This is useful in computing the scaled Jacobian and 
+     * pointwise volume in a 3D mesh.
+    */
+    for (int i = 0; i < 3; i++) {
+        M(0, i) = V1[i];
+        M(1, i) = V2[i];
+        M(2, i) = V3[i];
+    }
+}
+
+void getMetric3d(double *metrics, const double *T_, double *coords) {
+    // Map vertices as vectors
+    Map<Vector3d> V1((double *) &coords[0]);
+    Map<Vector3d> V2((double *) &coords[3]);
+    Map<Vector3d> V3((double *) &coords[6]);
+    Map<Vector3d> V4((double *) &coords[9]);
+    
+    // Precompute some vectors, and distances
+    Vector3d V12 = V2 - V1;
+    Vector3d V13 = V3 - V1;
+    Vector3d V14 = V4 - V1;
+    Vector3d V23 = V3 - V2;
+    Vector3d V24 = V4 - V2;
+    Vector3d V34 = V4 - V3;
+    
+    double d12 = distance(V1, V2);
+    double d13 = distance(V1, V3);
+    double d14 = distance(V1, V4);
+    double d23 = distance(V2, V3);
+    double d24 = distance(V2, V4);
+    double d34 = distance(V3, V4);
+    
+    Matrix3d volMatrix;
+    mapMatrix3d(volMatrix, V12, V13, V14);
+
+    double volumeM = std::abs(volMatrix.determinant())
+
+    // Map tensor as 2x2 Matrices
+    Map<Matrix3d> M1((double *) &T_[0]);
+    Map<Matrix3d> M2((double *) &T_[9]);
+    Map<Matrix3d> M3((double *) &T_[18]);
+    Map<Matrix3d> M4((double *) &T_[27]);
+
+    // Compute M(x, y) at centroid x_c to get area_M
+    Matrix2d Mxc = (M1 + M2 + M3 + M4) / 3;
+    double areaM = volume * sqrt(Mxc.determinant());
+    
+    // Compute (squared) edge lengths in metric
+    double L1 = V12.dot(((M1 + M2)/2) * V12);
+    double L2 = V13.dot(((M1 + M3)/2) * V13);
+    double L3 = V14.dot(((M1 + M4)/2) * V14);
+    double L4 = V23.dot(((M2 + M3)/2) * V23);
+    double L5 = V24.dot(((M2 + M4)/2) * V24);
+    double L6 = V34.dot(((M3 + M4)/2) * V34);
+
+    metrics[0] = sqrt(3) * (L1 + L2 + L3 + L4 + L5 + L6) / (216 * volumeM);
+}
